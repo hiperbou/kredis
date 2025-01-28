@@ -17,15 +17,15 @@ java -jar kredis-1.0.0.jar 3000
 ## Kotlin Client:
 
 ```
-java -cp .\kredis-1.0.0.jar main.SocketClient [HOST] [PORT]
+java -cp kredis-1.0.0.jar main.SocketClient [HOST] [PORT]
 ```
 
 examples
 
 ```
-java -cp .\kredis-1.0.0.jar main.SocketClient 
-java -cp .\kredis-1.0.0.jar main.SocketClient 127.0.0.1
-java -cp .\kredis-1.0.0.jar main.SocketClient localhost 3000
+java -cp kredis-1.0.0.jar main.SocketClient 
+java -cp kredis-1.0.0.jar main.SocketClient 127.0.0.1
+java -cp kredis-1.0.0.jar main.SocketClient localhost 3000
 ```
 
 ## NodeJs Client:
