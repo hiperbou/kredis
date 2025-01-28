@@ -1,8 +1,10 @@
 const net = require('net');
 
+const args = process.argv.slice(2);
+
 const client = new net.Socket();
-const host = 'localhost';
-const port = 9669;
+const host = args[0] || 'localhost';
+const port = parseInt(args[1]) || 9669;
 
 client.connect(port, host, () => {
     console.log('Connected to server');
@@ -19,4 +21,5 @@ client.on('data', (data) => {
 
 client.on('close', () => {
     console.log('Connection closed');
+    process.stdin.destroy();
 });

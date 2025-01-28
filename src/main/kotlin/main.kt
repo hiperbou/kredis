@@ -5,21 +5,19 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.RENDEZVOUS
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.PrintWriter
-import java.net.ServerSocket
+import java.io.*
+import java.net.*
 
 sealed class Operation(val key: String, val clientChannel: Channel<String> = Channel(RENDEZVOUS))
 class GetOperation(key: String) : Operation(key)
 class SetOperation(key: String, val value: String) : Operation(key)
-class DelOperation(key: String ) : Operation(key)
+class DelOperation(key: String) : Operation(key)
 class IncrOperation(key: String) : Operation(key)
 class DecrOperation(key: String) : Operation(key)
 
 enum class Command(
-    val key: Boolean = false,
-    val value: Boolean = false,
+    private val keyRequired: Boolean = false,
+    private val valueRequired: Boolean = false,
     val operation: (String?, String?) -> Operation
 ){
     STOP(false, false, { _,_ -> throw StopCommandThrowable() }),
@@ -29,10 +27,10 @@ enum class Command(
     INCR(true, false, { k,_ -> IncrOperation(k!!) }),
     DECR(true, false, { k,_ -> DecrOperation(k!!) });
 
-    fun assertParams(k:String?, v:String?) {
-        if (key && k == null && value && v == null) throw InvalidParamsException("Missing key and value param")
-        if (key && k == null) throw InvalidParamsException("Missing key param")
-        if (value && v == null) throw InvalidParamsException("Missing value param")
+    fun validateParams(k:String?, v:String?) {
+        if (keyRequired && k == null && valueRequired && v == null) throw InvalidParamsException("Missing key and value param")
+        if (keyRequired && k == null) throw InvalidParamsException("Missing key param")
+        if (valueRequired && v == null) throw InvalidParamsException("Missing value param")
     }
 }
 
@@ -41,14 +39,15 @@ class NoInputException: Exception()
 class InvalidParamsException(message:String): Exception(message)
 
 val log = LoggerFactory.getLogger("KRedis")
+const val DEFAULT_PORT = 9669
 
-fun main():Unit = runBlocking {
+fun main(args: Array<String>):Unit = runBlocking {
     val operationChannel = Channel<Operation>(UNLIMITED)
     val state = mutableMapOf<String, String>()
 
     launch {
-        while(true) {
-            with(operationChannel.receive()) {
+        for(operation in operationChannel) {
+            with(operation) {
                 when (this) {
                     is GetOperation -> state[key] ?: ""
                     is SetOperation -> { state[key] = value; "OK" }
@@ -62,12 +61,11 @@ fun main():Unit = runBlocking {
             }
         }
     }
-    runServer(operationChannel)
+    runServer(args.getOrNull(0)?.toIntOrNull() ?: System.getenv("PORT")?.toInt() ?: DEFAULT_PORT, operationChannel)
 }
 
-suspend fun runServer(operationChannel: Channel<Operation>) = coroutineScope {
+suspend fun runServer(port:Int, operationChannel: Channel<Operation>) = coroutineScope {
     launch(Dispatchers.IO) {
-        val port = System.getenv("PORT")?.toInt() ?: 9669
         val server = ServerSocket(port)
         log.info("Listening on port $port")
 
@@ -79,12 +77,13 @@ suspend fun runServer(operationChannel: Channel<Operation>) = coroutineScope {
                     val output = PrintWriter(client.getOutputStream(), true)
                     val reader = BufferedReader(InputStreamReader(client.inputStream))
                     handleClient(output, reader, operationChannel)
-                } catch (t: StopCommandThrowable) {
-                    log.info("Closing client $client by request ")
-                } catch (t: NoInputException) {
-                    log.warn("Received no input from $client")
                 } catch (t: Throwable) {
-                    log.error("Error handling client", t)
+                    when(t){
+                        is StopCommandThrowable -> log.info("Closing client $client by request ")
+                        is SocketException -> log.info("Closing client $client by connection reset")
+                        is NoInputException -> log.warn("Received no input from $client")
+                        else -> log.error("Error handling client", t)
+                    }
                 } finally {
                     client.close()
                 }
@@ -103,7 +102,7 @@ suspend fun handleClient(output:PrintWriter, reader:BufferedReader, operationCha
             val value = tokens.getOrNull(2)
 
             val command = try {
-                Command.valueOf(tokens.first().toUpperCase()).apply { assertParams(key, value) }
+                Command.valueOf(tokens.first().toUpperCase()).apply { validateParams(key, value) }
             } catch (e:InvalidParamsException) {
                 output.println(e.message)
                 continue
