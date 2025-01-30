@@ -8,12 +8,12 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.io.*
 import java.net.*
 
-sealed class Operation(val key: String, val clientChannel: Channel<String> = Channel(RENDEZVOUS))
+sealed class Operation(val key: String, open val value:String? = null, val clientChannel: Channel<String> = Channel(RENDEZVOUS))
 class GetOperation(key: String) : Operation(key)
-class SetOperation(key: String, val value: String) : Operation(key)
+class SetOperation(key: String, override val value: String) : Operation(key)
 class DelOperation(key: String) : Operation(key)
-class IncrOperation(key: String) : Operation(key)
-class DecrOperation(key: String) : Operation(key)
+class IncrOperation(key: String, value:String?) : Operation(key, value)
+class DecrOperation(key: String, value:String?) : Operation(key, value)
 
 enum class Command(
     private val keyRequired: Boolean = false,
@@ -24,8 +24,8 @@ enum class Command(
     GET(true, false, { k,_ -> GetOperation(k!!) }),
     SET(true, true, { k,v -> SetOperation(k!!, v!!) }),
     DEL(true, false, { k,_ -> DelOperation(k!!) }),
-    INCR(true, false, { k,_ -> IncrOperation(k!!) }),
-    DECR(true, false, { k,_ -> DecrOperation(k!!) });
+    INCR(true, false, { k,v -> IncrOperation(k!!, v) }),
+    DECR(true, false, { k,v -> DecrOperation(k!!, v) });
 
     fun validateParams(k:String?, v:String?) {
         if (keyRequired && k == null && valueRequired && v == null) throw InvalidParamsException("Missing key and value param")
@@ -54,7 +54,7 @@ fun main(args: Array<String>):Unit = runBlocking {
                     is DelOperation -> if (state.remove(key) == null) "0" else "1"
                     is IncrOperation, is DecrOperation -> when(val intValue = (state[key] ?: "0").toIntOrNull()) {
                         null -> "Error: value is not an integer or out of range"
-                        else -> ((intValue + if(this is IncrOperation) 1 else -1).toString()).also { state[key] = it }
+                        else -> ((intValue + (value?.toIntOrNull() ?: 1) * if (this is IncrOperation) 1 else -1).toString()).also { state[key] = it }
                     }
                 }.let { clientChannel.send(it) }
                 clientChannel.close()
@@ -97,12 +97,12 @@ suspend fun handleClient(output:PrintWriter, reader:BufferedReader, operationCha
         while (true) {
             val input = reader.readLine() ?: throw NoInputException()
             //println("received: $input")
-            val tokens = input.trim().split(" ")
+            val tokens = input.trim().split("\\s+".toRegex(), limit = 3)
             val key = tokens.getOrNull(1)
             val value = tokens.getOrNull(2)
 
             val command = try {
-                Command.valueOf(tokens.first().toUpperCase()).apply { validateParams(key, value) }
+                Command.valueOf(tokens.first().uppercase()).apply { validateParams(key, value) }
             } catch (e:InvalidParamsException) {
                 output.println(e.message)
                 continue
