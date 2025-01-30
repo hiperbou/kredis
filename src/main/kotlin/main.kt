@@ -28,9 +28,9 @@ enum class Command(
     DECR(true, false, { k,v -> DecrOperation(k!!, v) });
 
     fun validateParams(k:String?, v:String?) {
-        if (keyRequired && k == null && valueRequired && v == null) throw InvalidParamsException("Missing key and value param")
-        if (keyRequired && k == null) throw InvalidParamsException("Missing key param")
-        if (valueRequired && v == null) throw InvalidParamsException("Missing value param")
+        if (keyRequired && k == null && valueRequired && v == null) throw InvalidParamsException("Error: Missing key and value param")
+        if (keyRequired && k == null) throw InvalidParamsException("Error: Missing key param")
+        if (valueRequired && v == null) throw InvalidParamsException("Error: Missing value param")
     }
 }
 
@@ -46,19 +46,22 @@ fun main(args: Array<String>):Unit = runBlocking {
     val state = mutableMapOf<String, String>()
 
     launch {
-        for(operation in operationChannel) {
-            with(operation) {
-                when (this) {
-                    is GetOperation -> state[key] ?: ""
-                    is SetOperation -> { state[key] = value; "OK" }
-                    is DelOperation -> if (state.remove(key) == null) "0" else "1"
-                    is IncrOperation, is DecrOperation -> when(val intValue = (state[key] ?: "0").toIntOrNull()) {
-                        null -> "Error: value is not an integer or out of range"
-                        else -> ((intValue + (value?.toIntOrNull() ?: 1) * if (this is IncrOperation) 1 else -1).toString()).also { state[key] = it }
+        for(operation in operationChannel) with(operation) {
+            when (this) {
+                is GetOperation -> state[key] ?: ""
+                is SetOperation -> { state[key] = value; "OK" }
+                is DelOperation -> if (state.remove(key) == null) "0" else "1"
+                is IncrOperation, is DecrOperation -> when(val intValue = (state[key] ?: "0").toIntOrNull()) {
+                    null -> "Error: key '$key' value is not an integer or out of range"
+                    else -> value?.toIntOrNull().let { increment ->
+                        when {
+                            (value != null && increment == null) -> "Error: provided value '$value' is not an integer or out of range"
+                            else -> ((intValue + (increment ?: 1) * if (this is IncrOperation) 1 else -1).toString()).also { state[key] = it }
+                        }
                     }
-                }.let { clientChannel.send(it) }
-                clientChannel.close()
-            }
+                }
+            }.let { clientChannel.send(it) }
+            clientChannel.close()
         }
     }
     runServer(args.getOrNull(0)?.toIntOrNull() ?: System.getenv("PORT")?.toInt() ?: DEFAULT_PORT, operationChannel)
@@ -92,28 +95,26 @@ suspend fun runServer(port:Int, operationChannel: Channel<Operation>) = coroutin
     }
 }
 
-suspend fun handleClient(output:PrintWriter, reader:BufferedReader, operationChannel: Channel<Operation>) {
-    withContext(Dispatchers.IO) {
-        while (true) {
-            val input = reader.readLine() ?: throw NoInputException()
-            //println("received: $input")
-            val tokens = input.trim().split("\\s+".toRegex(), limit = 3)
-            val key = tokens.getOrNull(1)
-            val value = tokens.getOrNull(2)
+suspend fun handleClient(output:PrintWriter, reader:BufferedReader, operationChannel: Channel<Operation>) = withContext(Dispatchers.IO) {
+    while (true) {
+        val input = reader.readLine() ?: throw NoInputException()
+        //println("received: $input")
+        val tokens = input.trim().split("\\s+".toRegex(), limit = 3)
+        val key = tokens.getOrNull(1)
+        val value = tokens.getOrNull(2)
 
-            val command = try {
-                Command.valueOf(tokens.first().uppercase()).apply { validateParams(key, value) }
-            } catch (e:InvalidParamsException) {
-                output.println(e.message)
-                continue
-            } catch (e:Throwable) {
-                output.println("Error: Invalid command: $input")
-                continue
-            }
-
-            val operation = command.operation(key, value)
-            operationChannel.send(operation)
-            output.println(operation.clientChannel.receive())
+        val command = try {
+            Command.valueOf(tokens.first().uppercase()).apply { validateParams(key, value) }
+        } catch (e:InvalidParamsException) {
+            output.println(e.message)
+            continue
+        } catch (e:Throwable) {
+            output.println("Error: Invalid command: $input")
+            continue
         }
+
+        val operation = command.operation(key, value)
+        operationChannel.send(operation)
+        output.println(operation.clientChannel.receive())
     }
 }
