@@ -14,6 +14,18 @@ java -jar kredis-1.0.0.jar
 java -jar kredis-1.0.0.jar 3000 
 ```
 
+##  Netcat
+
+```
+nc [HOST] [PORT]
+```
+
+example
+
+```
+nc localhost 3000
+```
+
 ## Kotlin Client:
 
 ```
