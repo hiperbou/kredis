@@ -8,7 +8,7 @@ const port = parseInt(args[1]) || 9669;
 
 client.connect(port, host, () => {
     console.log('Connected to server');
-    console.log("Usage: STOP, GET key, SET key value, DEL key, INCR key, DECR key");
+    console.log("Usage: STOP, GET key, SET key value, DEL key, INCR key [value], DECR key [value]");
     process.stdin.on('data', (data) => {
         console.log("Sending: " + data.toString().trim());
         client.write(data.toString());

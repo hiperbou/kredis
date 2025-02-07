@@ -17,7 +17,7 @@ object SocketClient {
         try {
             Socket(host, port).use { socket ->
                 log.info("Connected to server")
-                log.info("Usage: STOP, GET key, SET key value, DEL key, INCR key, DECR key")
+                log.info("Usage: STOP, GET key, SET key value, DEL key, INCR key [value], DECR key [value]")
 
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val writer = PrintWriter(socket.getOutputStream(), true)
