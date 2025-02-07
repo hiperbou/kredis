@@ -55,6 +55,76 @@ node client.js localhost 3000
 ```
 
 
+## **Commands**
+kredis keeps it simple with just a handful of commands. Here’s the full list:
+
+###  **SET key value**
+Stores a value under a key.
+
+Keys and values must not contain spaces (keep it simple, man).
+
+Example: 
+
+    set hello world
+    Response: OK
+
+###  **GET key**
+Retrieves the value stored under a key.
+
+Example: 
+
+    get hello
+    Response: world
+
+###  **DEL key**
+Deletes a key and its value.
+
+Example: 
+
+    del hello
+    Response: OK
+
+###  **INCR key [value]**
+Increments the numeric value of a key by the specified [value]. If the [value] is not provided, it defaults to 1. If the key doesn’t exist, it starts at 0.
+
+Examples:
+
+Increment by 1 (default):
+
+    incr counter
+    Response: 1
+
+Increment by a specific value:
+
+    incr score 10
+    Response: 10
+
+###  **DECR key [value]**
+Decrements the numeric value of a key by the specified [value]. If the [value] is not provided, it defaults to 1. If the key doesn’t exist, it starts at 0.
+
+Examples: 
+
+Decrement by 1 (default):
+
+    decr counter
+    Response: -1
+
+Decrement by a specific value:
+
+    decr score 2
+    Response: 8
+
+
+
+###  **STOP**
+Closes the session and disconnects from HippieDB. Use this when you’re done sharing the vibes.
+
+Example: 
+
+    stop
+    Response: (connection closes)
+
+---
 
 
 
